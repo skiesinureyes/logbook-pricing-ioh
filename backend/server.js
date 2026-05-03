@@ -1,28 +1,59 @@
-const express = require('express');
-const cors = require('cors');
-const db = require('./db'); // Mengambil koneksi dari db.js yang kita buat tadi
-require('dotenv').config();
+require('dotenv').config()
+const app = require('./src/app')
+const { sequelize } = require('./src/config/db')
+const seedAdmin = require('./src/utils/seedAdmin')
+const seedMasterData = require('./src/utils/seedMasterData')
 
-const app = express();
-const PORT = process.env.PORT || 5000;
+const {
+  User,
+  Group,
+  Division,
+  Department,
+  SalesTeam,
+  PricingTeam,
+  PreSalesTeam,
+  SubService,
+  Service,
+  BusinessCase,
+  TenderDetail,
+  ServiceDetail
+} = require('./src/models/index')
 
-app.use(cors());
-app.use(express.json());
+const PORT = process.env.PORT || 3000
 
-// Tes rute sederhana (Endpoint)
-app.get('/', (req, res) => {
-  res.send('Server Logbook Indosat Berjalan!');
-});
+const startServer = async () => {
+  try {
+    await sequelize.authenticate()
+    console.log('✅ Database connected')
 
-// Endpoint untuk mengambil semua data Business Case (Sesuai FR-10)
-app.get('/api/business-case', (req, res) => {
-  const query = 'SELECT * FROM business_cases';
-  db.query(query, (err, results) => {
-    if (err) return res.status(500).json({ error: err.message });
-    res.json(results);
-  });
-});
+    // Sync dalam urutan yang benar — parent dulu, child belakangan
+    await User.sync({ alter: true })
+    await Group.sync({ alter: true })
+    await Division.sync({ alter: true })
+    await Department.sync({ alter: true })
+    await SalesTeam.sync({ alter: true })
+    await PricingTeam.sync({ alter: true })
+    await PreSalesTeam.sync({ alter: true })
+    await SubService.sync({ alter: true })
+    await Service.sync({ alter: true })
+    await BusinessCase.sync({ alter: true })
+    await TenderDetail.sync({ alter: true })
+    await ServiceDetail.sync({ alter: true })
 
-app.listen(PORT, () => {
-  console.log(`Server running on http://localhost:${PORT}`);
-});
+    // Sync junction table
+    await sequelize.sync({ alter: true })
+
+    console.log('✅ Models synced')
+
+    await seedAdmin()
+    await seedMasterData()
+    app.listen(PORT, () => {
+      console.log(`🚀 Server running on http://localhost:${PORT}`)
+    })
+  } catch (error) {
+    console.error('❌ Failed to start server:', error)
+    process.exit(1)
+  }
+}
+
+startServer()
