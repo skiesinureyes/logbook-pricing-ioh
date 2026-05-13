@@ -28,8 +28,8 @@ Service.hasMany(ServiceDetail, { foreignKey: 'serviceId' })
 ServiceDetail.belongsTo(Service, { foreignKey: 'serviceId' })
 
 // Service → SubService
-SubService.hasMany(Service, { foreignKey: 'subServiceId' })
-Service.belongsTo(SubService, { foreignKey: 'subServiceId' })
+Service.hasMany(SubService, { foreignKey: 'serviceId', onDelete: 'CASCADE' })
+SubService.belongsTo(Service, { foreignKey: 'serviceId' })
 
 // BusinessCase → PricingTeam
 PricingTeam.hasMany(BusinessCase, { foreignKey: 'pricingTeamId' })

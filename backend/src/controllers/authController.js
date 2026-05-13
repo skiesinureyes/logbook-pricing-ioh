@@ -9,7 +9,7 @@ const login = async (req, res) => {
     if (!username || !password) {
       return res.status(400).json({
         status: 'error',
-        message: 'Username dan password wajib diisi'
+        message: 'Username and password need to be filled in.'
       })
     }
 
@@ -18,14 +18,14 @@ const login = async (req, res) => {
     if (!user) {
       return res.status(401).json({
         status: 'error',
-        message: 'Username atau password salah'
+        message: 'Username not found. Please check your username and try again'
       })
     }
 
     if (!user.isActive) {
       return res.status(403).json({
         status: 'error',
-        message: 'Akun Anda telah dinonaktifkan'
+        message: 'Your account is deactivated. Please contact administrator.'
       })
     }
 
@@ -34,7 +34,7 @@ const login = async (req, res) => {
     if (!isPasswordValid) {
       return res.status(401).json({
         status: 'error',
-        message: 'Username atau password salah'
+        message: 'Password is incorrect. Please check your credentials and try again.'
       })
     }
 
@@ -50,7 +50,7 @@ const login = async (req, res) => {
 
     return res.status(200).json({
       status: 'success',
-      message: 'Login berhasil',
+      message: 'Login successful!',
       data: {
         token,
         user: {
@@ -66,7 +66,7 @@ const login = async (req, res) => {
     console.error(error)
     return res.status(500).json({
       status: 'error',
-      message: 'Terjadi kesalahan pada server'
+      message: 'An error occurred on the server'
     })
   }
 }
@@ -74,7 +74,7 @@ const login = async (req, res) => {
 const logout = (req, res) => {
   return res.status(200).json({
     status: 'success',
-    message: 'Logout berhasil'
+    message: 'Logout successful!'
   })
 }
 

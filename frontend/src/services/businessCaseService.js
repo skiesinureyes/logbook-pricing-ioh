@@ -1,7 +1,7 @@
 import api from './api'
 
 const businessCaseService = {
-  getAll: (params) => api.get('/business-cases', { params }),
+  getAll: (params) => api.get('/business-cases', { params }), getDashboardStats: (params) => api.get('/business-cases/dashboard/stats', { params }),
   getPendingFollowUp: () => api.get('/business-cases/pending-follow-up'),
   getById: (id) => api.get(`/business-cases/${id}`),
   create: (formData) => api.post('/business-cases', formData, {

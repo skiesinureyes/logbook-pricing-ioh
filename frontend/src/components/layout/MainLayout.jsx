@@ -21,7 +21,8 @@ const styles = {
     marginLeft: '64px',
     flex: 1,
     padding: '32px',
-    minHeight: '100vh'
+    minHeight: '100vh',
+    overflow: 'auto'
   }
 }
 

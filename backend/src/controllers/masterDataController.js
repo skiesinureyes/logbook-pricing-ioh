@@ -44,6 +44,12 @@ const createCRUD = (Model, include = []) => ({
       await item.destroy()
       return res.status(200).json({ status: 'success', message: 'Data berhasil dihapus' })
     } catch (error) {
+      if (error.name === 'SequelizeForeignKeyConstraintError') {
+        return res.status(400).json({
+          status: 'error',
+          message: 'Data tidak dapat dihapus karena masih digunakan oleh data lain'
+        })
+      }
       console.error(error)
       return res.status(500).json({ status: 'error', message: 'Terjadi kesalahan pada server' })
     }

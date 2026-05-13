@@ -106,11 +106,10 @@ const UserManagementPage = () => {
       {/* Header */}
       <div style={styles.header}>
         <div>
-          <h1 style={styles.title}>Manajemen Pengguna</h1>
-          <p style={styles.subtitle}>Kelola akun pengguna sistem IsiLogbook</p>
+          <h1 style={styles.title}>User Management</h1>
         </div>
         <button onClick={openAddModal} style={styles.addButton}>
-          + Tambah Pengguna
+          + Add New User
         </button>
       </div>
 
