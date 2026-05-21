@@ -27,21 +27,21 @@ const startServer = async () => {
     console.log('✅ Database connected')
 
     // Sync dalam urutan yang benar — parent dulu, child belakangan
-    await User.sync({ alter: true })
-    await Group.sync({ alter: true })
-    await Division.sync({ alter: true })
-    await Department.sync({ alter: true })
-    await SalesTeam.sync({ alter: true })
-    await PricingTeam.sync({ alter: true })
-    await PreSalesTeam.sync({ alter: true })
-    await SubService.sync({ alter: true })
-    await Service.sync({ alter: true })
-    await BusinessCase.sync({ alter: true })
-    await TenderDetail.sync({ alter: true })
-    await ServiceDetail.sync({ alter: true })
+    await User.sync({ force: false })
+    await Group.sync({ force: false })
+    await Division.sync({ force: false })
+    await Department.sync({ force: false })
+    await SalesTeam.sync({ force: false })
+    await PricingTeam.sync({ force: false })
+    await PreSalesTeam.sync({ force: false })
+    await SubService.sync({ force: false })
+    await Service.sync({ force: false })
+    await BusinessCase.sync({ force: false })
+    await TenderDetail.sync({ force: false })
+    await ServiceDetail.sync({ force: false })
 
     // Sync junction table
-    await sequelize.sync({ alter: true })
+    await sequelize.sync({ force: false })
 
     console.log('✅ Models synced')
 

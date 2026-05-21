@@ -11,75 +11,38 @@ const SubService = require('../models/SubService')
 const Department = require('../models/Department')
 const Division = require('../models/Division')
 const Group = require('../models/Group')
-const path = require('path')
 const fs = require('fs')
 const ExcelJS = require('exceljs')
-const { subServiceCRUD } = require('./masterDataController')
+const { logAudit } = require('../utils/auditLogger')
+const {
+  sanitizeDate, sanitizeInt, sanitizeBigInt,
+  sanitizeFloat, sanitizeStr,
+  calculateAutoFields, generateChangeSummary,
+  summarizeServiceDetails
+} = require('../utils/bcHelpers')
 
-// ── helpers ───────────────────────────────────────────────────────────────────
-const sanitizeDate = (val) => {
-  if (!val || val === '' || val === 'Invalid date') return null
-  return val
-}
-
-const sanitizeInt = (val) => {
-  if (!val && val !== 0) return null
-  const n = parseInt(val)
-  return isNaN(n) ? null : n
-}
-
-const sanitizeBigInt = (val) => {
-  if (!val && val !== 0) return null
-  const n = Number(String(val).replace(/\D/g, ''))
-  return isNaN(n) || n === 0 ? null : n
-}
-
-const sanitizeFloat = (val) => {
-  if (!val && val !== 0) return null
-  const n = parseFloat(val)
-  return isNaN(n) ? null : n
-}
-
-const sanitizeStr = (val) => {
-  if (!val || val === '') return null
-  return val
-}
-
-// Generate bcCode
+// ── Generate bcCode ───────────────────────────────────────────────────────────
 const generateBcCode = async (serviceId) => {
   const service = await Service.findByPk(serviceId)
   const serviceName = service ? service.name.toUpperCase() : 'UNKNOWN'
   const now = new Date()
   const month = String(now.getMonth() + 1).padStart(2, '0')
   const year = now.getFullYear()
-  const count = await BusinessCase.count()
-  const seq = String(count + 1).padStart(3, '0')
+
+  const existing = await BusinessCase.findAll({
+    where: { bcCode: { [Op.like]: `%-${month}-CPBC-${serviceName}-${year}` } },
+    attributes: ['bcCode'],
+    raw: true
+  })
+
+  const maxSeq = existing.reduce((max, bc) => {
+    const parts = bc.bcCode?.split('-')
+    const num = parseInt(parts?.[0]) || 0
+    return num > max ? num : max
+  }, 0)
+
+  const seq = String(maxSeq + 1).padStart(3, '0')
   return `${seq}-${month}-CPBC-${serviceName}-${year}`
-}
-
-// Auto-calculate fields
-const calculateAutoFields = (data) => {
-  const tcv = Number(data.tcv) || 0
-  const totalCoS = Number(data.totalCoS) || 0
-  const directOpex = Number(data.directOpex) || 0
-  const otherOpexDirect = Number(data.otherOpexDirect) || 0
-  const indirectOpex = Number(data.indirectOpex) || 0
-  const totalNetRev = Number(data.totalNetRev) || 0
-  const y1RevYearly = Number(data.y1RevYearly) || 0
-  const totalCapex = Number(data.totalCapex) || 0
-
-  const pprEligibility = (y1RevYearly > 1000000000 && totalCoS > 1000000000 && totalCapex > 1000000000)
-    ? 'Eligible' : 'Not Eligible'
-
-  const totalOpex = totalCoS + directOpex + otherOpexDirect + indirectOpex
-  const ebitda = tcv - totalOpex
-  let ebitdaMargin = null
-  if (tcv > 0) {
-    const margin = ebitda / tcv
-    if (isFinite(margin)) ebitdaMargin = margin
-  }
-
-  return { pprEligibility, ebitda, ebitdaMargin, totalOpex }
 }
 
 // ── GET all business cases ────────────────────────────────────────────────────
@@ -103,7 +66,7 @@ const getAllBC = async (req, res) => {
       where,
       distinct: true,
       include: [
-        { model: SalesTeam, through: { attributes: [] }, required: false }, // ← required: false
+        { model: SalesTeam, through: { attributes: [] }, required: false },
         { model: PricingTeam, attributes: ['id', 'name'], required: false },
         { model: PreSalesTeam, attributes: ['id', 'name'], required: false },
         { model: ServiceDetail, required: false, include: [{ model: Service, required: false, include: [{ model: SubService, required: false }] }] }
@@ -285,12 +248,23 @@ const createBC = async (req, res) => {
           pricePerMbps: sanitizeBigInt(sd.pricePerMbps),
           infraType: sanitizeStr(sd.infraType),
           infraNotes: sanitizeStr(sd.infraNotes),
-          subServiceId: sanitizeInt(sd.subServiceId), // ← tambah ini
+          subServiceId: sanitizeInt(sd.subServiceId),
           businessCaseId: bc.id,
           serviceId: sanitizeInt(sd.serviceId)
         }, { transaction: t })
       }
     }
+
+    // ── AUDIT LOG: CREATE ────────────────────────────────────────────────────
+    await logAudit({
+      action: 'CREATE',
+      entityId: bc.id,
+      bcCode: bc.bcCode,
+      bcTitle: bc.bcTitle,
+      userId: req.user.id,
+      description: `Business Case "${bc.bcTitle}" berhasil ditambahkan`,
+      transaction: t
+    })
 
     await t.commit()
     return res.status(201).json({
@@ -336,6 +310,29 @@ const updateBC = async (req, res) => {
       fileName = req.file.originalname
       filePath = req.file.path
       fileUploadedAt = new Date()
+    }
+
+    // ── Snapshot SEBELUM update (termasuk service details) ───────────────────
+    const oldServiceDetails = await ServiceDetail.findAll({
+      where: { businessCaseId: bc.id },
+      raw: true
+    })
+
+    const oldSnapshot = {
+      bcTitle: bc.bcTitle, bcType: bc.bcType, cpbDate: bc.cpbDate,
+      projectType: bc.projectType, activityType: bc.activityType,
+      projectStatus: bc.projectStatus, followUpNotes: bc.followUpNotes,
+      esReqDate: bc.esReqDate, cfDate: bc.cfDate, dueDate: bc.dueDate,
+      custName: bc.custName, custJoinYear: bc.custJoinYear,
+      lineOfBusiness: bc.lineOfBusiness, contractType: bc.contractType,
+      activationType: bc.activationType, rfsDate: bc.rfsDate,
+      contractPeriod: bc.contractPeriod,
+      pricingTeamId: bc.pricingTeamId, preSalesTeamId: bc.preSalesTeamId,
+      pprStatus: bc.pprStatus,
+      tcv: bc.tcv, otc: bc.otc, mrc: bc.mrc, totalNetRev: bc.totalNetRev,
+      totalCapex: bc.totalCapex, wacc: bc.wacc, npv: bc.npv,
+      irr: bc.irr, payback: bc.payback,
+      fileName: bc.fileName
     }
 
     await bc.update({
@@ -414,10 +411,47 @@ const updateBC = async (req, res) => {
           infraNotes: sanitizeStr(sd.infraNotes),
           businessCaseId: bc.id,
           serviceId: sanitizeInt(sd.serviceId),
-          subServiceId: sanitizeInt(sd.subServiceId) 
+          subServiceId: sanitizeInt(sd.subServiceId)
         }, { transaction: t })
       }
     }
+
+    // ── AUDIT LOG: UPDATE dengan deteksi perubahan field + service details ───
+    const fieldChanges = generateChangeSummary(oldSnapshot, {
+      bcTitle, bcType, cpbDate, projectType, activityType, projectStatus,
+      followUpNotes, esReqDate, cfDate, dueDate, custName,
+      custJoinYear: sanitizeInt(custJoinYear),
+      lineOfBusiness, contractType, activationType, rfsDate, contractPeriod,
+      pricingTeamId: sanitizeInt(pricingTeamId),
+      preSalesTeamId: sanitizeInt(preSalesTeamId),
+      pprStatus,
+      tcv: sanitizeBigInt(tcv), otc: sanitizeBigInt(otc), mrc: sanitizeBigInt(mrc),
+      totalNetRev: sanitizeBigInt(totalNetRev),
+      totalCapex: sanitizeBigInt(totalCapex),
+      wacc: sanitizeFloat(wacc), npv: sanitizeBigInt(npv),
+      irr: sanitizeFloat(irr), payback: sanitizeFloat(payback),
+      fileName: req.file ? fileName : bc.fileName
+    })
+
+    // Deteksi perubahan service details
+    const oldSvcStr = summarizeServiceDetails(oldServiceDetails)
+    const newSvcStr = summarizeServiceDetails(serviceDetails || [])
+    const serviceChange = oldSvcStr !== newSvcStr ? 'Detail Layanan: berubah' : null
+
+    const allChanges = [fieldChanges, serviceChange].filter(Boolean)
+    const finalDescription = allChanges.length > 0
+      ? allChanges.join(' | ')
+      : 'Tidak ada perubahan terdeteksi'
+
+    await logAudit({
+      action: 'UPDATE',
+      entityId: bc.id,
+      bcCode: bc.bcCode,
+      bcTitle: bcTitle || bc.bcTitle,
+      userId: req.user.id,
+      description: finalDescription,
+      transaction: t
+    })
 
     await t.commit()
     return res.status(200).json({ status: 'success', message: 'Business Case berhasil diperbarui' })
@@ -434,7 +468,19 @@ const deleteBC = async (req, res) => {
     const bc = await BusinessCase.findByPk(req.params.id)
     if (!bc) return res.status(404).json({ status: 'error', message: 'Business Case tidak ditemukan' })
     if (bc.filePath && fs.existsSync(bc.filePath)) fs.unlinkSync(bc.filePath)
+
+    const { id, bcCode, bcTitle } = bc
     await bc.destroy()
+
+    await logAudit({
+      action: 'DELETE',
+      entityId: id,
+      bcCode,
+      bcTitle,
+      userId: req.user.id,
+      description: `Business Case "${bcCode || id}" berhasil dihapus`
+    })
+
     return res.status(200).json({ status: 'success', message: 'Business Case berhasil dihapus' })
   } catch (error) {
     console.error(error)
@@ -711,12 +757,10 @@ const getDashboardStats = async (req, res) => {
       ? bcs.filter(bc => bc.ServiceDetails?.some(sd => sd.Service?.name === serviceType))
       : bcs
 
-    // BC by Status
     const byStatus = {}
     filteredBcs.forEach(bc => { byStatus[bc.projectStatus] = (byStatus[bc.projectStatus] || 0) + 1 })
     const bcByStatus = Object.entries(byStatus).map(([status, count]) => ({ status, count }))
 
-    // TCV by Service
     const tcvByService = {}
     filteredBcs.forEach(bc => {
       const svcs = [...new Set(bc.ServiceDetails?.map(sd => sd.Service?.name).filter(Boolean) || [])]
@@ -726,7 +770,6 @@ const getDashboardStats = async (req, res) => {
       service, totalTcv, totalTcvMillions: Math.round(totalTcv / 1000000)
     }))
 
-    // BC by Service over time
     const allServiceNames = [...new Set(
       filteredBcs.flatMap(bc => bc.ServiceDetails?.map(sd => sd.Service?.name).filter(Boolean) || [])
     )]

@@ -10,6 +10,7 @@ const SubService = require('./SubService')
 const Group = require('./Group')
 const Division = require('./Division')
 const Department = require('./Department')
+const AuditLog = require('./AuditLog')
 
 // User → BusinessCase
 User.hasMany(BusinessCase, { foreignKey: 'userId' })
@@ -61,6 +62,10 @@ Division.hasMany(Department, { foreignKey: 'divisionId' })
 Division.belongsTo(Group, { foreignKey: 'groupId' })
 Group.hasMany(Division, { foreignKey: 'groupId' })
 
+// AuditLog → User
+User.hasMany(AuditLog, { foreignKey: 'userId' })
+AuditLog.belongsTo(User, { foreignKey: 'userId' })
+
 module.exports = {
   User,
   BusinessCase,
@@ -73,5 +78,6 @@ module.exports = {
   SubService,
   Group,
   Division,
-  Department
+  Department,
+  AuditLog
 }
