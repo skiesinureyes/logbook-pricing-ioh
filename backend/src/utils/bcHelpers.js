@@ -46,8 +46,7 @@ const calculateAutoFields = (data) => {
   const ebitda = tcv - totalOpex
   let ebitdaMargin = null
   if (tcv > 0) {
-    const margin = ebitda / tcv
-    if (isFinite(margin)) ebitdaMargin = margin
+    ebitdaMargin = ebitda / tcv
   }
 
   return { pprEligibility, ebitda, ebitdaMargin, totalOpex }

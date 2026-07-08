@@ -25,6 +25,6 @@ router.get('/:id', verifyToken, getBCById)
 router.get('/:id/file', verifyToken, downloadFile)
 router.post('/', verifyToken, authorizeRoles('Admin', 'Staf'), upload.single('file'), createBC)
 router.put('/:id', verifyToken, authorizeRoles('Admin', 'Staf'), upload.single('file'), updateBC)
-router.delete('/:id', verifyToken, authorizeRoles('Admin'), deleteBC)
+router.delete('/:id', verifyToken, authorizeRoles('Admin', 'Staf'), deleteBC)
 
 module.exports = router

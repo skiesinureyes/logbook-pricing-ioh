@@ -286,14 +286,14 @@ describe('calculateAutoFields()', () => {
     expect(result.pprEligibility).toBe('Not Eligible')
   })
 
-  test('UT-55: EBITDA Margin adalah null jika margin tidak finite (Infinity)', () => {
+  test('UT-55: EBITDA Margin dihitung dari TCV bernilai kecil', () => {
     const result = calculateAutoFields({
         tcv: 1,
         totalCoS: 0, directOpex: 0, otherOpexDirect: 0, indirectOpex: 0,
         y1RevYearly: 0, totalCapex: 0
     })
-    // margin = (1-0)/1 = 1, ini finite, jadi ebitdaMargin = 1
-    expect(isFinite(result.ebitdaMargin)).toBe(true)
+    // margin = (1-0)/1 = 1
+    expect(result.ebitdaMargin).toBe(1)
   })
 })
 
@@ -418,5 +418,11 @@ describe('summarizeServiceDetails()', () => {
     const result = summarizeServiceDetails(details)
     expect(result).toContain('Detail: Fiber Optik 100Mbps')
   })
-  
+
+  test('UT-58: mengabaikan Service ID jika bernilai falsy', () => {
+    const details = [{ serviceId: null, serviceSegment: 'TelCo' }]
+    const result = summarizeServiceDetails(details)
+    expect(result).not.toContain('Service ID')
+    expect(result).toContain('Segment: TelCo')
+  })
 })
