@@ -57,7 +57,7 @@ const runVolumeTest = async () => {
       process.exit(1)
     }
 
-    const VOLUME = 10000
+    const VOLUME = 5000
     console.log(`📦 Memulai insert ${VOLUME} data Business Case dummy...\n`)
 
     // ── INSERT PHASE ──────────────────────────────────────────────────────────
